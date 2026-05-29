@@ -1,0 +1,15 @@
+{
+  "name": "nginx-gateway",
+  "version": "1.0.0",
+  "description": "Nginx Reverse Proxy Gateway with Let's Encrypt SSL",
+  "scripts": {
+    "config:generate": "node scripts/generate-config.js",
+    "ssl:get": "node scripts/get-ssl-cert.js",
+    "ssl:renew": "node scripts/renew-cert.js",
+    "start": "node scripts/quick-start.js",
+    "stop": "docker-compose down"
+  },
+  "keywords": ["nginx", "gateway", "letsencrypt", "docker"],
+  "author": "",
+  "license": "MIT"
+}

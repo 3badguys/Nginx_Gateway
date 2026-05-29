@@ -1,0 +1,30 @@
+# Nginx logs directory
+logs/
+
+# Generated Nginx configuration files (generated from templates)
+nginx/nginx.conf
+nginx/conf.d/*.conf
+!nginx/conf.d/*.template
+
+# Let's Encrypt certificates (contains sensitive information, do not commit to version control)
+letsencrypt/
+www/certbot/.well-known/
+
+# Old SSL certificate directory (if exists)
+ssl/*.crt
+ssl/*.key
+ssl/*.pem
+
+# Environment variable files (contains sensitive information)
+.env
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
