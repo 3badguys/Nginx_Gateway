@@ -6,7 +6,7 @@
     "config:generate": "node scripts/generate-config.js",
     "ssl:get": "node scripts/get-ssl-cert.js",
     "ssl:renew": "node scripts/renew-cert.js",
-    "start": "node scripts/quick-start.js",
+    "start": "npm run ssl:get && docker compose up -d",
     "stop": "docker-compose down"
   },
   "keywords": ["nginx", "gateway", "letsencrypt", "docker"],

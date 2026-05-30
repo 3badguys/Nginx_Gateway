@@ -46,7 +46,6 @@ Nginx_Gateway/
 │   ├── generate-config.js          # Nginx 配置生成脚本
 │   ├── get-ssl-cert.js             # SSL 证书获取脚本
 │   ├── renew-cert.js               # SSL 证书续期脚本
-│   ├── quick-start.js              # 快速启动脚本
 │   ├── utils.js                    # 公共工具函数
 │   └── README.md                   # 脚本使用说明
 └── nginx/
@@ -72,7 +71,6 @@ Nginx_Gateway/
 - **`scripts/generate-config.js`** - 验证配置并生成 Nginx 配置文件
 - **`scripts/get-ssl-cert.js`** - 获取 Let's Encrypt SSL 证书
 - **`scripts/renew-cert.js`** - 手动续期 SSL 证书
-- **`scripts/quick-start.js`** - 一键部署脚本（验证 + 证书检查 + 启动）
 - **`scripts/utils.js`** - 公共工具函数（环境加载、命令执行等）
 
 #### 🔧 Nginx 配置
@@ -382,7 +380,7 @@ Nginx 容器（持续运行）
 | `npm run config:generate` | 生成 Nginx 配置文件 |
 | `npm run ssl:get` | 获取 Let's Encrypt SSL 证书 |
 | `npm run ssl:renew` | 手动续期 SSL 证书 |
-| `npm start` | 快速启动（包含配置验证、证书检查、服务启动） |
+| `npm start` | 获取/检查 SSL 证书并启动所有服务 |
 | `npm stop` | 停止所有服务 |
 
 ### 直接执行脚本
@@ -393,7 +391,6 @@ Nginx 容器（持续运行）
 node scripts/generate-config.js
 node scripts/get-ssl-cert.js your-domain.com your-email@example.com
 node scripts/renew-cert.js your-domain.com
-node scripts/quick-start.js
 ```
 
 ### 跨平台兼容
