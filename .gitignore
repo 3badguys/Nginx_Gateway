@@ -6,6 +6,9 @@ nginx/nginx.conf
 nginx/conf.d/*.conf
 !nginx/conf.d/*.template
 
+# Generated FRP configuration (generated from template)
+frp/frps.toml
+
 # Let's Encrypt certificates (contains sensitive information, do not commit to version control)
 letsencrypt/
 www/certbot/.well-known/

@@ -1,0 +1,18 @@
+# FRP Server Configuration
+# This file is auto-generated from frps.toml.template by generate-config.js
+# Do not edit directly — edit .env and re-run npm run config:generate
+
+bindPort = ${FRPS_BIND_PORT}
+
+# Dashboard (internal only, proxied through Nginx)
+webServer.addr = "0.0.0.0"
+webServer.port = ${FRPS_DASHBOARD_PORT}
+webServer.user = "${FRPS_DASHBOARD_USER}"
+webServer.password = "${FRPS_DASHBOARD_PWD}"
+
+# Authentication token for client connections
+auth.token = "${FRPS_TOKEN}"
+
+# Virtual host ports for HTTP/HTTPS tunneling
+vhostHTTPPort = ${FRPS_VHOST_HTTP_PORT}
+vhostHTTPSPort = ${FRPS_VHOST_HTTPS_PORT}

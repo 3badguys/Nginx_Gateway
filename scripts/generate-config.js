@@ -24,7 +24,15 @@ function main() {
     'NGINX_WORKER_CONNECTIONS',
     'CLIENT_MAX_BODY_SIZE',
     'ACCESS_LOG',
-    'ERROR_LOG'
+    'ERROR_LOG',
+    'FRPS_BIND_PORT',
+    'FRPS_DASHBOARD_PORT',
+    'FRPS_DASHBOARD_PATH',
+    'FRPS_DASHBOARD_USER',
+    'FRPS_DASHBOARD_PWD',
+    'FRPS_TOKEN',
+    'FRPS_VHOST_HTTP_PORT',
+    'FRPS_VHOST_HTTPS_PORT'
   ];
   
   // Validate all required variables
@@ -50,7 +58,8 @@ function main() {
     'nginx/conf.d',
     'nginx/letsencrypt',
     'nginx/www/certbot',
-    'nginx/logs'
+    'nginx/logs',
+    'frp'
   ]);
   console.log();
   
@@ -80,10 +89,27 @@ function main() {
       FRONTEND_PATH: env.FRONTEND_PATH,
       BACKEND_SERVICE_NAME: env.BACKEND_SERVICE_NAME,
       BACKEND_PORT: env.BACKEND_PORT,
-      BACKEND_PATH: env.BACKEND_PATH
+      BACKEND_PATH: env.BACKEND_PATH,
+      FRPS_DASHBOARD_PORT: env.FRPS_DASHBOARD_PORT,
+      FRPS_DASHBOARD_PATH: env.FRPS_DASHBOARD_PATH
     }
   );
-  
+
+  // Generate frps config
+  processTemplate(
+    require('path').join(baseDir, 'frp/frps.toml.template'),
+    require('path').join(baseDir, 'frp/frps.toml'),
+    {
+      FRPS_BIND_PORT: env.FRPS_BIND_PORT,
+      FRPS_DASHBOARD_PORT: env.FRPS_DASHBOARD_PORT,
+      FRPS_DASHBOARD_USER: env.FRPS_DASHBOARD_USER,
+      FRPS_DASHBOARD_PWD: env.FRPS_DASHBOARD_PWD,
+      FRPS_TOKEN: env.FRPS_TOKEN,
+      FRPS_VHOST_HTTP_PORT: env.FRPS_VHOST_HTTP_PORT,
+      FRPS_VHOST_HTTPS_PORT: env.FRPS_VHOST_HTTPS_PORT
+    }
+  );
+
   console.log('\n✓ Configuration generated successfully!');
 }
 

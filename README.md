@@ -17,6 +17,7 @@
   - GraphQL Subscriptions
   - 任何使用 WebSocket 的应用
 - ✅ 灵活的扩展能力
+- ✅ FRP 服务端集成（内网穿透）
 
 ### 当前配置
 
@@ -48,6 +49,8 @@ Nginx_Gateway/
 │   ├── renew-cert.js               # SSL 证书续期脚本
 │   ├── utils.js                    # 公共工具函数
 │   └── README.md                   # 脚本使用说明
+├── frp/
+│   └── frps.toml.template          # FRP 服务端配置模板
 └── nginx/
     ├── nginx.conf.template         # Nginx 主配置模板
     ├── nginx.conf                  # Nginx 主配置文件（自动生成）
@@ -68,7 +71,7 @@ Nginx_Gateway/
 - **`.env.example`** - 环境变量配置模板，包含所有必需配置项
 
 #### 💻 脚本文件
-- **`scripts/generate-config.js`** - 验证配置并生成 Nginx 配置文件
+- **`scripts/generate-config.js`** - 验证配置并生成 Nginx 和 FRP 配置文件
 - **`scripts/get-ssl-cert.js`** - 获取 Let's Encrypt SSL 证书
 - **`scripts/renew-cert.js`** - 手动续期 SSL 证书
 - **`scripts/utils.js`** - 公共工具函数（环境加载、命令执行等）
