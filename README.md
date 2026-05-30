@@ -183,19 +183,19 @@ npm run ssl:get your-domain.com your-email@example.com
 #### 4️⃣ 启动服务
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 #### 5️⃣ 验证部署
 
 查看容器运行状态：
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 查看 Nginx 日志：
 ```bash
-docker-compose logs -f nginx-gateway
+docker compose logs -f nginx-gateway
 ```
 
 #### 7️⃣ 配置本地 DNS (可选)
@@ -217,31 +217,31 @@ docker-compose logs -f nginx-gateway
 
 ### 启动服务
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 停止服务
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### 重启服务
 ```bash
-docker-compose restart
+docker compose restart
 ```
 
 ### 查看日志
 ```bash
 # 查看所有日志
-docker-compose logs -f
+docker compose logs -f
 
 # 查看 Nginx 日志
-docker-compose logs -f nginx-gateway
+docker compose logs -f nginx-gateway
 ```
 
 ### 重新构建
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### 进入容器
@@ -271,7 +271,7 @@ docker exec -it nginx-gateway sh
 
 4. 重启 Nginx:
    ```bash
-   docker-compose restart nginx-gateway
+   docker compose restart nginx-gateway
    ```
 
 ### 方法二:手动配置
@@ -320,7 +320,7 @@ location /new-project/ {
 ### 3. 重启 Nginx
 
 ```bash
-docker-compose restart nginx-gateway
+docker compose restart nginx-gateway
 ```
 
 ## 🔐 SSL 证书管理
@@ -347,7 +347,7 @@ npm run ssl:renew your-domain.com
 ### 查看证书信息
 
 ```bash
-docker-compose run --rm certbot certificates
+docker compose run --rm certbot certificates
 ```
 
 ### 自动续期机制
@@ -411,7 +411,7 @@ node scripts/renew-cert.js your-domain.com
 
 检查日志:
 ```bash
-docker-compose logs nginx-gateway
+docker compose logs nginx-gateway
 ```
 
 常见原因:
@@ -423,7 +423,7 @@ docker-compose logs nginx-gateway
 
 检查后端服务是否正常运行：
 ```bash
-docker-compose ps
+docker compose ps
 docker network inspect shared_gateway_net
 ```
 
@@ -433,7 +433,7 @@ docker network inspect shared_gateway_net
 
 如果遇到证书错误：
 1. 确保证书已成功获取：`ls nginx/letsencrypt/live/your-domain.com/`
-2. 检查证书有效期：`docker-compose run --rm certbot certificates`
+2. 检查证书有效期：`docker compose run --rm certbot certificates`
 3. 重新获取证书：`npm run ssl:get your-domain.com your-email@example.com`
 4. 检查 `.env` 配置是否完整：`npm run config:generate`
 

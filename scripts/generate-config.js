@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const path = require('path');
 const { loadEnv, createDirectories, processTemplate } = require('./utils');
 
 // Main function
@@ -51,6 +52,7 @@ function main() {
   console.log(`  Email: ${env.LETSENCRYPT_EMAIL}`);
   console.log(`  Frontend: ${env.FRONTEND_SERVICE_NAME}:${env.FRONTEND_PORT} at ${env.FRONTEND_PATH}`);
   console.log(`  Backend: ${env.BACKEND_SERVICE_NAME}:${env.BACKEND_PORT} at ${env.BACKEND_PATH}`);
+  console.log(`  FRP Dashboard: https://${env.DOMAIN}${env.FRPS_DASHBOARD_PATH} (bind:${env.FRPS_BIND_PORT} vhost:${env.FRPS_VHOST_HTTP_PORT}/${env.FRPS_VHOST_HTTPS_PORT})`);
   console.log();
   
   // Create directories
@@ -63,12 +65,12 @@ function main() {
   ]);
   console.log();
   
-  const baseDir = require('path').join(__dirname, '..');
+  const baseDir = path.join(__dirname, '..');
   
   // Generate nginx.conf
   processTemplate(
-    require('path').join(baseDir, 'nginx/nginx.conf.template'),
-    require('path').join(baseDir, 'nginx/nginx.conf'),
+    path.join(baseDir, 'nginx/nginx.conf.template'),
+    path.join(baseDir, 'nginx/nginx.conf'),
     {
       NGINX_WORKER_PROCESSES: env.NGINX_WORKER_PROCESSES,
       NGINX_WORKER_CONNECTIONS: env.NGINX_WORKER_CONNECTIONS,
@@ -80,8 +82,8 @@ function main() {
   
   // Generate domain config
   processTemplate(
-    require('path').join(baseDir, 'nginx/conf.d/domain.conf.template'),
-    require('path').join(baseDir, 'nginx/conf.d', `${env.DOMAIN}.conf`),
+    path.join(baseDir, 'nginx/conf.d/domain.conf.template'),
+    path.join(baseDir, 'nginx/conf.d', `${env.DOMAIN}.conf`),
     {
       DOMAIN: env.DOMAIN,
       FRONTEND_SERVICE_NAME: env.FRONTEND_SERVICE_NAME,
@@ -97,8 +99,8 @@ function main() {
 
   // Generate frps config
   processTemplate(
-    require('path').join(baseDir, 'frp/frps.toml.template'),
-    require('path').join(baseDir, 'frp/frps.toml'),
+    path.join(baseDir, 'frp/frps.toml.template'),
+    path.join(baseDir, 'frp/frps.toml'),
     {
       FRPS_BIND_PORT: env.FRPS_BIND_PORT,
       FRPS_DASHBOARD_PORT: env.FRPS_DASHBOARD_PORT,

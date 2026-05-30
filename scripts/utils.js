@@ -35,19 +35,6 @@ function loadEnv() {
 }
 
 /**
- * Detect docker-compose command (supports both v1 and v2)
- * @returns {string} docker-compose or docker compose
- */
-function getDockerCompose() {
-  try {
-    execSync('docker compose version', { stdio: 'ignore' });
-    return 'docker compose';
-  } catch {
-    return 'docker-compose';
-  }
-}
-
-/**
  * Create directories if they don't exist
  * @param {string[]} dirs - Array of directory paths relative to project root
  */
@@ -73,7 +60,12 @@ function processTemplate(templatePath, outputPath, variables) {
     console.log(`⊘ Template not found: ${path.basename(templatePath)}`);
     return;
   }
-  
+
+  if (fs.existsSync(outputPath)) {
+    console.log(`⊘ Skip (already exists): ${path.relative(path.join(__dirname, '..'), outputPath)}`);
+    return;
+  }
+
   let content = fs.readFileSync(templatePath, 'utf8');
   
   // Replace all variables
@@ -111,7 +103,6 @@ function hasCertificate(domain) {
 
 module.exports = {
   loadEnv,
-  getDockerCompose,
   createDirectories,
   processTemplate,
   execCommand,

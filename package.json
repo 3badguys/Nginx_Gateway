@@ -7,7 +7,7 @@
     "ssl:get": "node scripts/get-ssl-cert.js",
     "ssl:renew": "node scripts/renew-cert.js",
     "start": "npm run ssl:get && docker compose up -d",
-    "stop": "docker-compose down"
+    "stop": "docker compose down"
   },
   "keywords": ["nginx", "gateway", "letsencrypt", "docker"],
   "author": "",

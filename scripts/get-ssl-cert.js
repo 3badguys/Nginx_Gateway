@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { loadEnv, getDockerCompose, execCommand } = require('./utils');
+const { loadEnv, execCommand, hasCertificate } = require('./utils');
 
 // Main function
 function main() {
@@ -9,20 +9,24 @@ function main() {
   
   const domain = args[0] || env.DOMAIN;
   const email = args[1] || env.LETSENCRYPT_EMAIL;
-  
-  const dockerCompose = getDockerCompose();
-  
+
+  // Skip if certificate already exists
+  if (hasCertificate(domain)) {
+    console.log(`Certificate for ${domain} already exists, skipping.`);
+    return;
+  }
+
   console.log(`Getting certificate for ${domain}...`);
   
   try {
     // Stop nginx-gateway to free port 80
     console.log('Stopping nginx-gateway...');
-    execCommand(`${dockerCompose} down nginx-gateway`);
+    execCommand(`docker compose down nginx-gateway`);
     
     // Run certbot to get certificate
     console.log('Running Certbot...');
     execCommand(
-      `${dockerCompose} run --rm certbot certonly --webroot ` +
+      `docker compose run --rm certbot certonly --webroot ` +
       `--webroot-path /var/www/certbot ` +
       `-d "${domain}" --email "${email}" --agree-tos --no-eff-email ` +
       `--force-renewal --keep-until-expiring`
@@ -30,7 +34,7 @@ function main() {
     
     // Restart nginx-gateway
     console.log('Starting nginx-gateway...');
-    execCommand(`${dockerCompose} up -d nginx-gateway`);
+    execCommand(`docker compose up -d nginx-gateway`);
     
     console.log('\n✓ Certificate acquired');
   } catch (error) {
