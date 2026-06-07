@@ -18,9 +18,9 @@ function main() {
     'FRONTEND_SERVICE_NAME',
     'FRONTEND_PORT',
     'FRONTEND_PATH',
-    'BACKEND_SERVICE_NAME',
-    'BACKEND_PORT',
-    'BACKEND_PATH',
+    // 'BACKEND_SERVICE_NAME',  // optional — frontend nginx handles /api/ routing
+    // 'BACKEND_PORT',
+    // 'BACKEND_PATH',
     'NGINX_WORKER_PROCESSES',
     'NGINX_WORKER_CONNECTIONS',
     'CLIENT_MAX_BODY_SIZE',

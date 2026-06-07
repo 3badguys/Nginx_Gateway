@@ -25,10 +25,10 @@
 |--------|-----|
 | 域名 | `your-domain.com` |
 | 共享网络 | `shared_gateway_net` |
-| 前端服务 | `skateboard-frontend` (端口 5173) |
-| 后端服务 | `skateboard-backend` (端口 3000) |
+| 前端服务 | `skateboard-frontend` (容器内端口 80) |
+| 后端服务 | `skateboard-backend` (容器内端口 3000，通过前端 nginx 转发) |
 | 前端访问路径 | `https://your-domain.com/gfs/` |
-| 后端访问路径 | `https://your-domain.com/gfs/api/` |
+| API 路径 | `https://your-domain.com/gfs/api/*` → 前端 nginx `/api/*` → backend |
 | HTTP 端口 | 80 (自动重定向到 443) |
 | HTTPS 端口 | 443 |
 
@@ -105,7 +105,11 @@ Nginx_Gateway/
 npm start
 ```
 
-或使用 npm 脚本分步执行：
+此命令会：
+1. 执行 `npm run ssl:get` — 检查/获取 SSL 证书（standalone 模式，不依赖 nginx）
+2. 执行 `docker compose up -d` — 启动所有服务
+
+或分步执行：
 ```bash
 npm run config:generate  # 生成 Nginx 配置
 npm run ssl:get          # 获取 Let's Encrypt 证书
@@ -139,13 +143,13 @@ LETSENCRYPT_EMAIL=your-email@example.com
 
 # Frontend Configuration
 FRONTEND_SERVICE_NAME=skateboard-frontend
-FRONTEND_PORT=5173
+FRONTEND_PORT=80
 FRONTEND_PATH=/gfs/
 
-# Backend Configuration
-BACKEND_SERVICE_NAME=skateboard-backend
-BACKEND_PORT=3000
-BACKEND_PATH=/gfs/api/
+# Backend Configuration (optional — frontend nginx handles /api/* routing)
+# BACKEND_SERVICE_NAME=skateboard-backend
+# BACKEND_PORT=3000
+# BACKEND_PATH=/gfs/api/
 
 # Nginx Configuration
 NGINX_WORKER_PROCESSES=auto
@@ -155,7 +159,7 @@ ACCESS_LOG=/var/log/nginx/access.log
 ERROR_LOG=/var/log/nginx/error.log
 ```
 
-> 💡 **提示**: 所有配置项都是必需的，不能留空或使用默认值。
+> 💡 **提示**: 标记为必需的配置项不能留空。Backend 已注释（API 请求通过前端 nginx 转发）。
 
 #### 2️⃣ 生成 Nginx 配置
 
@@ -292,7 +296,7 @@ services:
     volumes:
       - ../new-project:/app
     expose:
-      - "5173"
+      - "80"
     networks:
       - shared_gateway_net
     restart: unless-stopped
@@ -305,7 +309,7 @@ services:
 ```nginx
 # 新项目路径转发
 location /new-project/ {
-    proxy_pass http://new-project-frontend:5173/;
+    proxy_pass http://new-project-frontend:80/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -442,8 +446,9 @@ docker network inspect shared_gateway_net
 如果 `npm run config:generate` 报错：
 ```bash
 Error: Missing required environment variables in .env:
+  - DOMAIN
+  - LETSENCRYPT_EMAIL
   - FRONTEND_SERVICE_NAME
-  - BACKEND_PORT
   ...
 ```
 
@@ -484,9 +489,10 @@ proxy_set_header Connection "upgrade";
         │                             │                │
 ┌───────────────┐           ┌────────────────┐ ┌─────────────┐
 │ skateboard-   │           │ skateboard-    │ │  其他服务... │
-│ frontend      │           │ backend        │ │             │
-│ :5173         │           │ :3000          │ │  :port      │
-└───────────────┘           └────────────────┘ └─────────────┘
+│ frontend (:80)│           │ backend (:3000)│ │             │
+│ (含 /api/→    │──────→    │                │ │  :port      │
+│  backend 路由) │           └────────────────┘ └─────────────┘
+└───────────────┘
 ```
 
 ### 请求流程
@@ -503,15 +509,16 @@ proxy_set_header Connection "upgrade";
 
 3. **路径转发示例**:
    ```
-   # 前端请求
+   # 前端资源请求
    https://your-domain.com/gfs/xxx 
-     → Nginx 匹配 /gfs/ 
-     → 转发到 http://skateboard-frontend:5173/xxx
+     → Nginx 匹配 /gfs/，剥除 /gfs/
+     → 转发 http://skateboard-frontend:80/xxx → 前端 nginx 返回资源
    
-   # 后端 API 请求
-   https://your-domain.com/gfs/api/xxx
-     → Nginx 匹配 /gfs/api/
-     → 转发到 http://skateboard-backend:3000/xxx
+   # 后端 API 请求（统一走前端 nginx）
+   https://your-domain.com/gfs/api/students
+     → Nginx 匹配 /gfs/，剥除 /gfs/
+     → 转发 http://skateboard-frontend:80/api/students
+     → 前端 nginx 的 location /api/ → http://skateboard-backend:3000/students
    ```
 
 所有服务通过 Docker 共享网络 `shared_gateway_net` 通信，Nginx 作为统一入口处理外部请求。
