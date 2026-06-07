@@ -24,11 +24,14 @@ function main() {
     execCommand(`docker compose down nginx-gateway`);
     
     // Run certbot to get certificate
+    // Use --standalone: certbot runs its own temporary web server on port 80,
+    // which avoids the deadlock of needing nginx running for --webroot mode.
     console.log('Running Certbot...');
+    // --entrypoint certbot overrides the renewal-loop entrypoint defined in
+    // docker-compose.yml, so certonly actually runs instead of the loop.
     execCommand(
-      `docker compose run --rm certbot certonly --webroot ` +
-      `--webroot-path /var/www/certbot ` +
-      `-d "${domain}" --email "${email}" --agree-tos --no-eff-email ` +
+      `docker compose run --rm -p 80:80 --entrypoint certbot certbot certonly ` +
+      `--standalone -d "${domain}" --email "${email}" --agree-tos --no-eff-email ` +
       `--force-renewal --keep-until-expiring`
     );
     
