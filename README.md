@@ -522,3 +522,127 @@ proxy_set_header Connection "upgrade";
    ```
 
 所有服务通过 Docker 共享网络 `shared_gateway_net` 通信，Nginx 作为统一入口处理外部请求。
+
+## ⚠️ 原理与踩坑记录
+
+记录本项目遇到的几个关键问题及其根因，供后续维护参考。
+
+### 1. Certbot `--webroot` vs `--standalone`
+
+**现象**：`npm run ssl:get` 在服务器上卡死不动。
+
+**根因**：
+
+| 模式 | 工作原理 | 依赖条件 |
+|------|---------|---------|
+| `--webroot` | certbot 把验证文件写入 webroot 目录，Let's Encrypt 通过 80 端口访问该文件完成验证 | **必须有 web server 在 80 端口** |
+| `--standalone` | certbot 自己启动一个临时 web server 监听 80 端口完成验证 | **80 端口不能被占用** |
+
+脚本原本的逻辑是：先 `docker compose down nginx-gateway` 释放 80 端口，然后用 `--webroot` 模式。但 webroot 模式需要 nginx 在跑才能响应 ACME 挑战 — 自相矛盾，certbot 一直等验证超时。
+
+**修复**：改用 `--standalone`，certbot 自带临时服务器，不依赖 nginx。
+
+### 2. `docker compose run` 会继承 service 的 `entrypoint`
+
+**现象**：`docker compose run --rm certbot certonly --standalone ...` 执行后，`docker inspect` 发现容器运行的仍然是 docker-compose.yml 里定义的续期死循环。
+
+**根因**：`docker compose run` 继承目标 service 的全部配置（volumes、networks、entrypoint 等），只覆盖你显式指定的部分。certbot service 在 docker-compose.yml 中定义了：
+
+```yaml
+entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h ...'"
+```
+
+所以 `certonly --standalone ...` 并没有消失，而是被**追加到了 entrypoint 的后面**。Docker 实际运行的是：
+
+```
+/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; ...' certonly --standalone ...
+```
+
+`sh -c` 后面多出来的参数会变成 `$0`、`$1`、`$2`…，但脚本里没有引用 `$@`，这些参数就悄悄被吞了，壳子继续跑死循环续期。
+
+**修复**：加 `--entrypoint certbot` 显式覆盖，让 `certonly` 真正执行。
+
+最终命令里出现了两个 `certbot`：
+
+```
+docker compose run --rm -p 80:80 --entrypoint certbot certbot certonly --standalone ...
+                                      │                 │
+                                      ▼                 ▼
+                                  --entrypoint 的值   service 名
+```
+
+| 位置 | 值 | 含义 |
+|------|-----|------|
+| `--entrypoint certbot` | 第 1 个 | 容器内的二进制 `/usr/bin/certbot`，覆盖 yaml 的续期死循环 |
+| `certbot` | 第 2 个 | `docker-compose.yml` 里的 **service 名称** |
+
+只是碰巧 service 名和二进制都叫 `certbot`，看起来像写重了。后面的 `certonly` 是 certbot 的子命令（"只获取证书不安装"）。
+
+之所以 `certbot`（service 名）夹在中间，是 `docker compose run` 的语法规则：
+
+```
+docker compose run [OPTIONS] SERVICE [COMMAND] [ARGS...]
+```
+
+所以这条命令：
+
+```
+docker compose run --rm -p 80:80 --entrypoint certbot   certbot   certonly --standalone ...
+                   ─────────── OPTIONS ──────────────   ───────   ─────── COMMAND ───────
+                                                         SERVICE
+```
+
+`--entrypoint certbot` 是 OPTIONS，中间的 `certbot` 是 SERVICE，后面的 `certonly --standalone ...` 是传给容器的 COMMAND + ARGS。
+
+### 3. Nginx 上游 DNS 解析：启动时 vs 请求时
+
+**现象**：nginx-gateway 反复崩溃，日志报 `host not found in upstream "frps"`。
+
+**根因**：Nginx 对 `proxy_pass` 里主机名的解析时机取决于写法：
+
+| 写法 | 解析时机 | 上游不可用时的行为 |
+|------|---------|-------------------|
+| `proxy_pass http://frps:7500/;` | **启动时**解析一次，缓存结果 | `[emerg]` 崩溃，拒绝启动 |
+| `set $upstream frps:7500;`<br>`proxy_pass http://$upstream/;` | **请求时**实时解析（需配合 `resolver`） | 启动正常，请求时 502 |
+
+Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下 nginx 启动时解析不到 `frps`，直接 fatal error。
+
+**修复**：FRP 的 proxy_pass 改用 nginx 变量写法，配合 Docker 内置 DNS (`resolver 127.0.0.11`)。
+
+### 4. `proxy_pass` 变量写法的副作用：路径前缀剥离失效
+
+**现象**：前端静态资源 404，浏览器收到 CSS 文件但是 HTML MIME 类型。
+
+**根因**：Nginx `proxy_pass` 的路径剥离规则：
+
+| 写法 | 路径处理 |
+|------|---------|
+| `proxy_pass http://upstream/;`（静态，带尾斜杠） | **自动剥离** location 前缀 |
+| `proxy_pass http://$upstream/;`（变量，带尾斜杠） | **不剥离**，完整 URI 原样转发 |
+
+例如 `location /gfs/` + `proxy_pass http://skateboard-frontend:80/;` 会把 `/gfs/assets/index.css` 转为 `/assets/index.css` 转发。但换成变量 `$frontend_upstream` 后就变成原样透传 `/gfs/assets/index.css`，前端 nginx 收到后匹配不到，fallback 到 SPA 的 `index.html`。
+
+**修复**：前/后端保留静态 `proxy_pass`（它们始终运行，无启动时序问题）。FRP 用变量 + `rewrite` 手动剥离路径。
+
+### 5. Docker 内置 DNS：`127.0.0.11`
+
+**是什么**：Docker 在每个加入自定义网络的容器内嵌入的 DNS 服务器。它自动解析同网络下其他容器的 hostname，且能感知容器重启后的 IP 变化。
+
+**为什么需要显式配置**：Nginx 默认用系统的 `/etc/resolv.conf`，在容器里会自动指向 `127.0.0.11`，但 nginx 只在启动时解析一次然后缓存。显式写 `resolver 127.0.0.11 valid=30s;` 告诉 nginx 每 30 秒刷新 DNS 缓存，这样容器 IP 变了不用 reload nginx。
+
+### 6. Docker 容器间通信用容器内端口，不是宿主机端口
+
+**现象**：502 Bad Gateway，nginx error log 显示 `connect() failed ... Connection refused` 连 `172.20.0.4:5173`。
+
+**根因**：`docker ps` 看到 `0.0.0.0:5173->80/tcp`，`.env` 里顺手写了 `FRONTEND_PORT=5173`。但 5173 是宿主机端口映射，容器间通信走 Docker 内网，直接连容器的**内部端口** 80。5173 在容器内根本没进程监听。
+
+**修复**：`FRONTEND_PORT=80`（容器内实际监听端口）。
+
+### 7. Nginx 健康检查的 HTTPS 重定向陷阱
+
+**现象**：nginx-gateway status 一直 `unhealthy`，healthcheck 日志显示 `ssl_client: SSL_connect` + `certificate verify failed`。
+
+**根因**：健康检查 `wget --spider http://localhost/` 访问 80 端口，nginx 返回 301 重定向到 HTTPS。wget 跟过去访问 `https://localhost/`，但 SSL 证书是签给域名（如 `your-domain.com`）的，`localhost` 不匹配 → SSL 验证失败 → exit code 1 → unhealthy。
+
+**修复**：在 HTTP server 加 `/health` 端点直接返回 200（不跳转），wget 改为访问 `/health`。
+

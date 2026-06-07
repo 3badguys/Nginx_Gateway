@@ -13,8 +13,11 @@ function main() {
   
   try {
     // Run certbot to renew certificate
+    // --entrypoint certbot overrides the renewal-loop entrypoint defined in
+    // docker-compose.yml, so the renew command actually runs.
+    // webroot mode works here because nginx is already running on port 80.
     execCommand(
-      `docker compose run --rm certbot renew ` +
+      `docker compose run --rm --entrypoint certbot certbot renew ` +
       `--webroot --webroot-path /var/www/certbot --quiet`
     );
     
