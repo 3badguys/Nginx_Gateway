@@ -39,7 +39,8 @@ server {
 
     # Frontend service
     location ${FRONTEND_PATH} {
-        proxy_pass http://${FRONTEND_SERVICE_NAME}:${FRONTEND_PORT}/;
+        set $frontend_upstream ${FRONTEND_SERVICE_NAME}:${FRONTEND_PORT};
+        proxy_pass http://$frontend_upstream/;
         proxy_http_version 1.1;
         
         # WebSocket support
@@ -63,7 +64,8 @@ server {
 
     # Backend API proxy (optional)
     location ${BACKEND_PATH} {
-        proxy_pass http://${BACKEND_SERVICE_NAME}:${BACKEND_PORT}/;
+        set $backend_upstream ${BACKEND_SERVICE_NAME}:${BACKEND_PORT};
+        proxy_pass http://$backend_upstream/;
         proxy_http_version 1.1;
         
         # Proxy headers
