@@ -12,8 +12,8 @@ server {
     # Healthcheck — no redirect, plain HTTP 200
     location /health {
         access_log off;
+        default_type text/plain;
         return 200 'OK';
-        add_header Content-Type text/plain;
     }
 
     # Redirect other HTTP requests to HTTPS (301)
