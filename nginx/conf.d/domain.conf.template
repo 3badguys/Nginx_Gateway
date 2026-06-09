@@ -83,10 +83,21 @@ server {
 
     # FRP Dashboard proxy (internal only)
     location ${FRPS_DASHBOARD_PATH} {
-        rewrite ^${FRPS_DASHBOARD_PATH}(.*) $1 break;
-        set $frps_upstream frps:${FRPS_DASHBOARD_PORT};
-        proxy_pass http://$frps_upstream;
+        proxy_pass http://frps:${FRPS_DASHBOARD_PORT}/;
         proxy_http_version 1.1;
+
+        # Disable upstream compression so sub_filter can rewrite response body
+        proxy_set_header Accept-Encoding "";
+
+        # Rewrite redirect Location headers (302 from auth, etc.)
+        proxy_redirect / /frp/;
+
+        # Rewrite absolute paths in response body to stay under /frp/
+        sub_filter_types *;
+        sub_filter_once off;
+        sub_filter 'src="/static/' 'src="${FRPS_DASHBOARD_PATH}static/';
+        sub_filter 'href="/static/' 'href="${FRPS_DASHBOARD_PATH}static/';
+        sub_filter '"/api/' '"${FRPS_DASHBOARD_PATH}api/';
 
         # WebSocket support (for real-time dashboard stats)
         proxy_set_header Upgrade $http_upgrade;
