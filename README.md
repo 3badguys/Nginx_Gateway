@@ -607,7 +607,9 @@ docker compose run --rm -p 80:80 --entrypoint certbot   certbot   certonly --sta
 
 Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下 nginx 启动时解析不到 `frps`，直接 fatal error。
 
-**修复**：FRP 的 proxy_pass 改用 nginx 变量写法，配合 Docker 内置 DNS (`resolver 127.0.0.11`)。
+**尝试过**：FRP 的 proxy_pass 使用变量写法 + `resolver 127.0.0.11`，绕过启动时检查。
+
+**最终方案**：回归静态写法 `proxy_pass http://frps:7500/;`。原因：frps 是常驻服务（`restart: unless-stopped`），并非频繁启停的临时容器。即使偶尔重启，Docker DNS 更新 IP 后 nginx 短时间 502，下一轮请求即恢复。拿这个短暂退化换掉变量写法的 `resolver` 依赖和路径前缀剥离失效问题，更干净。
 
 ### 4. `proxy_pass` 变量写法的副作用：路径前缀剥离失效
 
@@ -622,7 +624,7 @@ Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下
 
 例如 `location /gfs/` + `proxy_pass http://skateboard-frontend:80/;` 会把 `/gfs/assets/index.css` 转为 `/assets/index.css` 转发。但换成变量 `$frontend_upstream` 后就变成原样透传 `/gfs/assets/index.css`，前端 nginx 收到后匹配不到，fallback 到 SPA 的 `index.html`。
 
-**修复**：前/后端保留静态 `proxy_pass`（它们始终运行，无启动时序问题）。FRP 用变量 + `rewrite` 手动剥离路径。
+**修复**：前/后端保留静态 `proxy_pass`（它们始终运行，无启动时序问题）。FRP Dashboard 改回静态写法后，路径前缀自动剥离，配合 `sub_filter` + `proxy_redirect` 处理页面内部的绝对路径引用（详见第 8 节）。
 
 ### 5. Docker 内置 DNS：`127.0.0.11`
 
@@ -646,3 +648,32 @@ Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下
 
 **修复**：在 HTTP server 加 `/health` 端点直接返回 200（不跳转），wget 改为访问 `/health`。
 
+### 8. Nginx `sub_filter` 响应体改写 vs `proxy_redirect` 响应头改写
+
+给 FRP Dashboard 做子路径代理时，Dashboard 页面里引用的静态资源和 API 接口都是绝对路径（`/static/xxx`、`/api/xxx`），不认 `/frp/` 前缀，导致资源 404、认证后重定向跑偏。需要两层改写配合：
+
+| 指令 | 作用域 | 解决的问题 |
+|------|--------|-----------|
+| `sub_filter` | HTTP 响应**体**（HTML/CSS/JS 文本） | 页面内容里 `src="/static/` → `src="/frp/static/` 等 |
+| `proxy_redirect` | HTTP 响应**头**（`Location` 字段） | 302/301 重定向 `/static/xxx` → `/frp/static/xxx` |
+
+两者互不冲突——一个改 body，一个改 header，各管各的。
+
+**关键配置**：
+
+```nginx
+# 关闭上游压缩，否则 sub_filter 改不了二进制 gzip 内容
+proxy_set_header Accept-Encoding "";
+
+# 改写响应体中的绝对路径
+sub_filter_types *;           # 对所有 MIME 类型生效（默认仅 text/html）
+sub_filter_once off;          # 替换所有出现，不止第一个
+sub_filter 'src="/static/' 'src="/frp/static/';
+sub_filter 'href="/static/' 'href="/frp/static/';
+sub_filter '"/api/' '"/frp/api/';
+
+# 改写重定向 Location 头
+proxy_redirect / /frp/;
+```
+
+**注意**：`sub_filter` 只能替换响应体中的**字面量**，对于 JavaScript 运行时动态构造的 URL（如 `fetch('/' + path)`）无能为力。不过 FRP Dashboard 的静态资源路径是硬编码字符串，覆盖率足够。
