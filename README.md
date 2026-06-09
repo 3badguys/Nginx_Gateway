@@ -523,6 +523,129 @@ proxy_set_header Connection "upgrade";
 
 所有服务通过 Docker 共享网络 `shared_gateway_net` 通信，Nginx 作为统一入口处理外部请求。
 
+### FRP 内网穿透
+
+项目内置 FRP 服务端，支持将公网流量通过加密隧道穿透到内网。
+
+#### 场景一：正常直连（无 FRP）
+
+```
+                   Internet
+                      │
+                 [浏览器访问]
+                      │
+               https://your-domain.com:443/gfs/
+                      │
+               ┌──────────────┐
+               │ Nginx Gateway│  ← SSL 终止 + 反向代理
+               │   (宿主机)    │
+               └──────────────┘
+                      │
+              shared_gateway_net
+                      │
+          ┌───────────┴────────────┐
+          ▼                        ▼
+   skateboard-frontend      skateboard-backend
+```
+
+**Nginx 直接暴露在服务器上，独占 443 端口处理 HTTPS。** 适用于所有服务都在同一台机器的场景。
+
+#### 场景二：FRP 内网穿透 — HTTP（vhost :8080）
+
+```
+  浏览器                   公网服务器                      内网
+  ──────                  ──────────                    ────
+                          ┌──────────┐
+  http://your-domain.com    │FRP 服务端│   FRP 隧道(HTTP)   ┌──────────────┐
+  :8080/gfs/ ──────────→ │  :8080   │ ─────────────────→ │ FRP 客户端    │
+                          │(vhost)   │                    │ :7000 ──→    │
+                          └──────────┘                    │ nginx:80     │
+                                                         │ (本地网关)    │
+                                                         └──────────────┘
+                                                               │
+                                                       shared_gateway_net
+                                                               │
+                                                    ┌──────────┴──────────┐
+                                                    ▼                     ▼
+                                             skateboard-frontend   skateboard-backend
+```
+
+**FRP 服务端监听 8080，接收浏览器 HTTP 请求，通过 FRP 隧道明文转发到内网客户端，客户端再丢给本地 nginx:80。** 不加密，适合内网环境或测试。
+
+#### 场景三：FRP 内网穿透 — HTTPS（vhost :8443）
+
+```
+  浏览器                   公网服务器                      内网
+  ──────                  ──────────                    ────
+  ① TLS 握手 (8443)
+  ───────────────────┐
+                     ▼
+  https://your-domain.com  ┌──────────────┐
+  :8443/gfs/ ──────────→ │FRP 服务端     │  FRP 隧道(加密)  ┌──────────────┐
+                         │vhostHTTPS    │ ───────────────→ │ FRP 客户端    │
+                         │ (Dashboard配证书)│(transport.tls加密)│ :7000 ──→    │
+                         │解密后 → 明文   │                  │ nginx:80     │
+                         └──────────────┘                   │ (本地网关)    │
+                                                           └──────────────┘
+                                                                 │
+                                                         shared_gateway_net
+                                                                 │
+                                                      ┌──────────┴──────────┐
+                                                      ▼                     ▼
+                                               skateboard-frontend   skateboard-backend
+```
+
+**两道 TLS 互不干扰：**
+
+| TLS 层 | 谁和谁之间 | 配置位置 | 证书 |
+|--------|-----------|---------|------|
+| ① 浏览器 ↔ FRP 服务端 :8443 | 浏览器拿到的是有效 HTTPS | FRP Dashboard → TLS 证书管理 | FRP 服务端（Dashboard 上传） |
+| ② FRP 服务端 ↔ FRP 客户端 :7000 | FRP 隧道自身加密（可选） | 客户端 `transport.tls.enable = true`（自签证书） | FRP 客户端（自动生成） |
+
+**nginx 从头到尾只看到明文 HTTP（`localPort = 80`），不参与外部 TLS。FRP 客户端 `type = "https"` 只管 :8443 对外那段，跟 nginx 无关。**
+
+#### 场景四：FRP Dashboard 管理（nginx 子路径代理）
+
+```
+  浏览器                              公网服务器
+  ──────                              ──────────
+  https://your-domain.com/frp/ ────→ ┌──────────────┐
+                                   │ Nginx Gateway │  内部 HTTP
+                                   │ location /frp/│ ────────────→ frps:7500
+                                   │ sub_filter    │  (Dashboard)
+                                   │ proxy_redirect│
+                                   └──────────────┘
+```
+
+**Dashboard 只在内网暴露 7500，通过 nginx 子路径 `/frp/` + HTTPS 对外。** Nginx 用 `sub_filter` 改写页面内的绝对路径（`/static/` → `/frp/static/`），`proxy_redirect` 改写认证跳转的 Location 头，保证所有请求都不跑出 `/frp/` 前缀。
+
+#### FRP 客户端配置示例
+
+对应场景二/三的内网客户端 `frpc.toml`：
+
+```toml
+serverAddr = "your-domain.com"
+serverPort = 7000
+auth.token = "change-me-to-a-random-string"
+
+# 开启隧道加密（客户端自签证书，无需服务端配置）
+transport.tls.enable = true
+
+[[proxies]]
+name = "nginx-gateway-http"
+type = "http"
+localIP = "nginx-gateway"
+localPort = 80
+customDomains = ["your-domain.com"]
+
+[[proxies]]
+name = "nginx-gateway-https"
+type = "https"
+localIP = "nginx-gateway"
+localPort = 80
+customDomains = ["your-domain.com"]
+```
+
 ## ⚠️ 原理与踩坑记录
 
 记录本项目遇到的几个关键问题及其根因，供后续维护参考。
