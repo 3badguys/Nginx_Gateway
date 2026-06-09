@@ -106,7 +106,7 @@ server {
 
     # Default location
     location / {
+        default_type application/json;
         return 404 '{"error": "Not Found"}';
-        add_header Content-Type application/json;
     }
 }
