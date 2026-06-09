@@ -33,7 +33,8 @@ function main() {
     'FRPS_DASHBOARD_PWD',
     'FRPS_TOKEN',
     'FRPS_VHOST_HTTP_PORT',
-    'FRPS_VHOST_HTTPS_PORT'
+    'FRPS_VHOST_HTTPS_PORT',
+    'FRP_CLIENTS_PATH'
   ];
   
   // Validate all required variables
@@ -93,7 +94,9 @@ function main() {
       BACKEND_PORT: env.BACKEND_PORT,
       BACKEND_PATH: env.BACKEND_PATH,
       FRPS_DASHBOARD_PORT: env.FRPS_DASHBOARD_PORT,
-      FRPS_DASHBOARD_PATH: env.FRPS_DASHBOARD_PATH
+      FRPS_DASHBOARD_PATH: env.FRPS_DASHBOARD_PATH,
+      FRP_CLIENTS_PATH: env.FRP_CLIENTS_PATH,
+      FRPS_VHOST_HTTP_PORT: env.FRPS_VHOST_HTTP_PORT
     }
   );
 

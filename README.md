@@ -609,15 +609,47 @@ proxy_set_header Connection "upgrade";
 ```
   浏览器                              公网服务器
   ──────                              ──────────
-  https://your-domain.com/frp/ ────→ ┌──────────────┐
+  https://your-domain.com/frps/ ────→ ┌──────────────┐
                                    │ Nginx Gateway │  内部 HTTP
-                                   │ location /frp/│ ────────────→ frps:7500
+                                   │ location /frps/│ ────────────→ frps:7500
                                    │ sub_filter    │  (Dashboard)
                                    │ proxy_redirect│
                                    └──────────────┘
 ```
 
-**Dashboard 只在内网暴露 7500，通过 nginx 子路径 `/frp/` + HTTPS 对外。** Nginx 用 `sub_filter` 改写页面内的绝对路径（`/static/` → `/frp/static/`），`proxy_redirect` 改写认证跳转的 Location 头，保证所有请求都不跑出 `/frp/` 前缀。
+**Dashboard 只在内网暴露 7500，通过 nginx 子路径 `/frps/` + HTTPS 对外。** Nginx 用 `sub_filter` 改写页面内的绝对路径（`/static/` → `/frps/static/`），`proxy_redirect` 改写认证跳转的 Location 头，保证所有请求都不跑出 `/frps/` 前缀。
+
+#### 场景五：FRP 隧道 + SPA 子路径部署
+
+**问题**：场景二/三中，公网 nginx 用 `proxy_pass http://frps:8080/;`（带尾斜杠）剥离了 `/frpc/`，传到本地 nginx 的路径是 `/gfs/xxx`。SPA 前端 `VITE_BASE=/gfs/` 能正常工作，但页面 JS 路由是在浏览器里跑的——浏览器 URL 是 `/frpc/gfs/xxx`，SPA 不认识 `/frpc/` 前缀，会把 `/gfs/` 拼到 URL 前面，导致跳转错乱。
+
+**方案**：让 `/frpc/` 前缀端到端透传，SPA 构建时也带上这个 base。
+
+```
+  浏览器                              公网服务器                 内网
+  ──────                              ──────────               ────
+  https://your-domain.com/frpc/gfs/ ──→ ┌──────────────┐
+                                      │ Nginx Gateway │
+                                      │ location /frpc/│        FRP 隧道
+                                      │ proxy_pass     │ ─────────────────→ ┌──────────────┐
+                                      │ http://frps:8080│                    │ FRP 客户端    │
+                                      │ (无尾斜杠,      │                    │ nginx:80     │
+                                      │  不剥离/frpc/)  │                    │              │
+                                      └──────────────┘                     │ location     │
+                                                                           │ /frpc/gfs/   │
+                                                                           │ /frpc/gfs/api/│
+                                                                           └──────────────┘
+```
+
+**三道分工**：
+
+| 环节 | 配置 | 作用 |
+|------|------|------|
+| 公网 nginx | `proxy_pass http://frps:8080;` （无尾斜杠） | `/frpc/gfs/xxx` 原样透传，不剥离 |
+| 内网 nginx | `location /frpc/gfs/ { proxy_pass http://frontend:80/; }` | 剥离 `/frpc/gfs/`，前端收到标准路径 |
+| 内网前端 | `VITE_BASE=/frpc/gfs/` | SPA 路由 base 匹配浏览器 URL，不跳偏 |
+
+**与直连的共存**：本地 nginx 同时保留 `location /gfs/`（直连）和 `location /frpc/gfs/`（穿透），两套路径各自剥离前缀后都指向同一个前端。前端构建两次或配置环境变量切换 `VITE_BASE`。
 
 #### FRP 客户端配置示例
 
@@ -773,12 +805,12 @@ Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下
 
 ### 8. Nginx `sub_filter` 响应体改写 vs `proxy_redirect` 响应头改写
 
-给 FRP Dashboard 做子路径代理时，Dashboard 页面里引用的静态资源和 API 接口都是绝对路径（`/static/xxx`、`/api/xxx`），不认 `/frp/` 前缀，导致资源 404、认证后重定向跑偏。需要两层改写配合：
+给 FRP Dashboard 做子路径代理时，Dashboard 页面里引用的静态资源和 API 接口都是绝对路径（`/static/xxx`、`/api/xxx`），不认 `/frps/` 前缀，导致资源 404、认证后重定向跑偏。需要两层改写配合：
 
 | 指令 | 作用域 | 解决的问题 |
 |------|--------|-----------|
-| `sub_filter` | HTTP 响应**体**（HTML/CSS/JS 文本） | 页面内容里 `src="/static/` → `src="/frp/static/` 等 |
-| `proxy_redirect` | HTTP 响应**头**（`Location` 字段） | 302/301 重定向 `/static/xxx` → `/frp/static/xxx` |
+| `sub_filter` | HTTP 响应**体**（HTML/CSS/JS 文本） | 页面内容里 `src="/static/` → `src="/frps/static/` 等 |
+| `proxy_redirect` | HTTP 响应**头**（`Location` 字段） | 302/301 重定向 `/static/xxx` → `/frps/static/xxx` |
 
 两者互不冲突——一个改 body，一个改 header，各管各的。
 
@@ -791,12 +823,12 @@ proxy_set_header Accept-Encoding "";
 # 改写响应体中的绝对路径
 sub_filter_types *;           # 对所有 MIME 类型生效（默认仅 text/html）
 sub_filter_once off;          # 替换所有出现，不止第一个
-sub_filter 'src="/static/' 'src="/frp/static/';
-sub_filter 'href="/static/' 'href="/frp/static/';
-sub_filter '"/api/' '"/frp/api/';
+sub_filter 'src="/static/' 'src="/frps/static/';
+sub_filter 'href="/static/' 'href="/frps/static/';
+sub_filter '"/api/' '"/frps/api/';
 
 # 改写重定向 Location 头
-proxy_redirect / /frp/;
+proxy_redirect / /frps/;
 ```
 
 **注意**：`sub_filter` 只能替换响应体中的**字面量**，对于 JavaScript 运行时动态构造的 URL（如 `fetch('/' + path)`）无能为力。不过 FRP Dashboard 的静态资源路径是硬编码字符串，覆盖率足够。
