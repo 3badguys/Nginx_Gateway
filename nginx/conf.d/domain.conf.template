@@ -40,51 +40,19 @@ server {
     # Frontend service
     location ${FRONTEND_PATH} {
         proxy_pass http://${FRONTEND_SERVICE_NAME}:${FRONTEND_PORT}/;
-        proxy_http_version 1.1;
-        
-        # WebSocket support
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        # Proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeout settings
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        # Buffering settings
+        include /etc/nginx/proxy-common.conf;
         proxy_buffering off;
     }
 
-    # Backend API proxy (optional)
-    # Uncomment and set BACKEND_SERVICE_NAME/BACKEND_PORT/BACKEND_PATH in .env if you
-    # need to proxy directly to backend. If BACKEND_PATH is a subpath of FRONTEND_PATH,
-    # leave it commented — the frontend location already handles those requests.
-    # location ${BACKEND_PATH} {
-    #     proxy_pass http://${BACKEND_SERVICE_NAME}:${BACKEND_PORT}/;
-    #     proxy_http_version 1.1;
-    #
-    #     # Proxy headers
-    #     proxy_set_header Host $host;
-    #     proxy_set_header X-Real-IP $remote_addr;
-    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    #     proxy_set_header X-Forwarded-Proto $scheme;
-    #
-    #     # Timeout settings
-    #     proxy_connect_timeout 60s;
-    #     proxy_send_timeout 60s;
-    #     proxy_read_timeout 60s;
-    # }
+    # Favicon catch — browsers auto-request /favicon.ico regardless of page path
+    location = /favicon.ico {
+        proxy_pass http://frps:${FRPS_DASHBOARD_PORT}/favicon.ico;
+    }
 
     # FRP Dashboard proxy (internal only)
     location ${FRPS_DASHBOARD_PATH} {
         proxy_pass http://frps:${FRPS_DASHBOARD_PORT}/;
-        proxy_http_version 1.1;
+        include /etc/nginx/proxy-common.conf;
 
         # Disable upstream compression so sub_filter can rewrite response body
         proxy_set_header Accept-Encoding "";
@@ -92,48 +60,18 @@ server {
         # Rewrite redirect Location headers (302 from auth, etc.)
         proxy_redirect / ${FRPS_DASHBOARD_PATH};
 
-        # Rewrite absolute paths in response body to stay under ${FRPS_DASHBOARD_PATH}
+        # Rewrite absolute paths in response body to stay under frps prefix
         sub_filter_types *;
         sub_filter_once off;
         sub_filter 'src="/static/' 'src="${FRPS_DASHBOARD_PATH}static/';
         sub_filter 'href="/static/' 'href="${FRPS_DASHBOARD_PATH}static/';
         sub_filter '"/api/' '"${FRPS_DASHBOARD_PATH}api/';
-
-        # WebSocket support (for real-time dashboard stats)
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeout settings
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
     }
 
     # FRP tunnel proxy — browsers hit this path, nginx forwards to FRP vhost HTTP
     location ${FRP_CLIENTS_PATH} {
         proxy_pass http://frps:${FRPS_VHOST_HTTP_PORT};
-        proxy_http_version 1.1;
-
-        # WebSocket support
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeout settings
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        include /etc/nginx/proxy-common.conf;
     }
 
     # Default location
