@@ -2,6 +2,8 @@
 # This file is auto-generated from frps.toml.template by generate-config.js
 # Do not edit directly — edit .env and re-run npm run config:generate
 
+# Bind address and port for frpc to connect
+bindAddr = "0.0.0.0"
 bindPort = ${FRPS_BIND_PORT}
 
 # Dashboard (internal only, proxied through Nginx)

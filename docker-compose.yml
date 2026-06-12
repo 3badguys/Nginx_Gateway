@@ -15,6 +15,8 @@ services:
       - ./nginx/logs:/var/log/nginx
     networks:
       - shared_gateway_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
@@ -38,14 +40,15 @@ services:
   frps:
     image: snowdreamtech/frps
     container_name: frps
+    network_mode: host
     volumes:
       - ./frp/frps.toml:/etc/frp/frps.toml:ro
-    ports:
-      - "${FRPS_BIND_PORT}:${FRPS_BIND_PORT}"
-      - "${FRPS_VHOST_HTTP_PORT}:${FRPS_VHOST_HTTP_PORT}"
-      - "${FRPS_VHOST_HTTPS_PORT}:${FRPS_VHOST_HTTPS_PORT}"
-    networks:
-      - shared_gateway_net
+    # ports:
+    #   - "${FRPS_BIND_PORT}:${FRPS_BIND_PORT}"
+    #   - "${FRPS_VHOST_HTTP_PORT}:${FRPS_VHOST_HTTP_PORT}"
+    #   - "${FRPS_VHOST_HTTPS_PORT}:${FRPS_VHOST_HTTPS_PORT}"
+    # networks:
+    #   - shared_gateway_net
     restart: unless-stopped
 
 networks:

@@ -832,3 +832,30 @@ proxy_redirect / /frps/;
 ```
 
 **注意**：`sub_filter` 只能替换响应体中的**字面量**，对于 JavaScript 运行时动态构造的 URL（如 `fetch('/' + path)`）无能为力。不过 FRP Dashboard 的静态资源路径是硬编码字符串，覆盖率足够。
+
+### 9. frps 使用 host 模式后，ports 和 networks 配置被忽略
+
+**现象**：`docker compose up` 后，`docker ps` 显示 frps 容器没有端口映射，且 `docker network inspect shared_gateway_net` 中找不到 frps 容器。
+
+**根因**：当服务设置 `network_mode: host` 后，Docker Compose **会忽略该服务的 `ports` 字段和 `networks` 字段**。host 模式直接使用宿主机网络栈，不需要也无法加入自定义网络或进行端口映射。
+
+**修复**：将 `ports` 和 `networks` 整段注释或删除，避免配置误导。frps 的端口（如 7000、7500）会直接监听在宿主机上，通过 `ss -tlnp | grep frps` 可验证。
+
+### 10. frps 改用 host 模式后，nginx 需通过 host.docker.internal 访问
+
+**现象**：frps `network_mode: host` 后，nginx 代理 `/frps/` 路径返回 502，日志显示 `connect() failed ... Connection refused` 连 `frps:7500`。
+
+**根因**：frps 不再属于自定义 Docker 网络，nginx 无法通过容器名 `frps` 解析到其 IP。`host` 模式下 frps 端口直接监听在宿主机，但 nginx 容器内需要借助特殊域名 `host.docker.internal` 才能访问宿主机。
+
+**修复**：
+
+1. 在 nginx 容器添加 `extra_hosts` 映射：
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+2. 将 nginx 配置中的 `proxy_pass http://frps:7500/` 改为 `proxy_pass http://host.docker.internal:7500/`（Dashboard 和 Vhost HTTP 同理）。
+
+3. 重启 nginx 容器。

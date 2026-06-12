@@ -46,12 +46,12 @@ server {
 
     # Favicon catch — browsers auto-request /favicon.ico regardless of page path
     location = /favicon.ico {
-        proxy_pass http://frps:${FRPS_DASHBOARD_PORT}/favicon.ico;
+        proxy_pass http://host.docker.internal:${FRPS_DASHBOARD_PORT}/favicon.ico;
     }
 
     # FRP Dashboard proxy (internal only)
     location ${FRPS_DASHBOARD_PATH} {
-        proxy_pass http://frps:${FRPS_DASHBOARD_PORT}/;
+        proxy_pass http://host.docker.internal:${FRPS_DASHBOARD_PORT}/;
         include /etc/nginx/proxy-common.conf;
 
         # Disable upstream compression so sub_filter can rewrite response body
@@ -70,7 +70,7 @@ server {
 
     # FRP tunnel proxy — browsers hit this path, nginx forwards to FRP vhost HTTP
     location ${FRP_CLIENTS_PATH} {
-        proxy_pass http://frps:${FRPS_VHOST_HTTP_PORT};
+        proxy_pass http://host.docker.internal:${FRPS_VHOST_HTTP_PORT};
         include /etc/nginx/proxy-common.conf;
     }
 
