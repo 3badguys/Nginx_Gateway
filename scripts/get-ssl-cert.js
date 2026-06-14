@@ -2,13 +2,18 @@
 
 const { loadEnv, execCommand, hasCertificate } = require('./utils');
 
-// Main function
 function main() {
   const args = process.argv.slice(2);
   const env = loadEnv();
-  
+
   const domain = args[0] || env.DOMAIN;
   const email = args[1] || env.LETSENCRYPT_EMAIL;
+  const provider = env.DNS_PROVIDER || 'west_cn';
+
+  if (!env.DNS_API_USER || !env.DNS_API_KEY) {
+    console.error('Error: DNS_API_USER and DNS_API_KEY must be set in .env');
+    process.exit(1);
+  }
 
   // Skip if certificate already exists
   if (hasCertificate(domain)) {
@@ -16,30 +21,36 @@ function main() {
     return;
   }
 
-  console.log(`Getting certificate for ${domain}...`);
-  
+  console.log(`Getting certificate for ${domain} + *.${domain}...`);
+
   try {
-    // Stop nginx-gateway to free port 80
-    console.log('Stopping nginx-gateway...');
-    execCommand(`docker compose down nginx-gateway`);
-    
-    // Run certbot to get certificate
-    // Use --standalone: certbot runs its own temporary web server on port 80,
-    // which avoids the deadlock of needing nginx running for --webroot mode.
-    console.log('Running Certbot...');
-    // --entrypoint certbot overrides the renewal-loop entrypoint defined in
-    // docker-compose.yml, so certonly actually runs instead of the loop.
+    // Ensure acme daemon is running
+    execCommand(`docker compose up -d acme`);
+
+    // Issue certificate via DNS-01 challenge (provider mapped by entrypoint wrapper)
+    console.log(`Issuing certificate (DNS-01 challenge via ${provider})...`);
     execCommand(
-      `docker compose run --rm -p 80:80 --entrypoint certbot certbot certonly ` +
-      `--standalone -d "${domain}" --email "${email}" --agree-tos --no-eff-email ` +
-      `--force-renewal --keep-until-expiring`
+      `docker compose run --rm -T acme --issue ` +
+      `--dns dns_${provider} ` +
+      `-d "${domain}" -d "*.${domain}" ` +
+      `--server letsencrypt ` +
+      `--email "${email}"`
     );
-    
-    // Restart nginx-gateway
-    console.log('Starting nginx-gateway...');
-    execCommand(`docker compose up -d nginx-gateway`);
-    
+
+    // Install cert to nginx path
+    console.log('Installing certificate...');
+    execCommand(
+      `docker compose run --rm -T acme --install-cert -d "${domain}" ` +
+      `--key-file /etc/letsencrypt/live/${domain}/privkey.pem ` +
+      `--fullchain-file /etc/letsencrypt/live/${domain}/fullchain.pem`
+    );
+
+    // Reload nginx to pick up new cert
+    execCommand(`docker compose exec -T nginx-gateway nginx -s reload`);
+
     console.log('\n✓ Certificate acquired');
+    console.log(`  Domain: ${domain}`);
+    console.log(`  Wildcard: *.${domain}`);
   } catch (error) {
     console.error('\n✗ Failed to acquire certificate');
     console.error(error.message);

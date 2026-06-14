@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 
 /**
@@ -25,7 +26,7 @@ function loadEnv() {
     // Skip empty lines and comments
     line = line.trim();
     if (!line || line.startsWith('#')) return;
-    
+
     const match = line.match(/^([^=]+)=(.*)$/);
     if (match) {
       env[match[1].trim()] = match[2].trim();
@@ -67,16 +68,16 @@ function processTemplate(templatePath, outputPath, variables) {
   }
 
   let content = fs.readFileSync(templatePath, 'utf8');
-  
+
   // Replace all variables
   Object.entries(variables).forEach(([key, value]) => {
     const regex = new RegExp(`\\$\\{${key}\\}`, 'g');
     content = content.replace(regex, value);
   });
-  
+
   // Ensure Unix-style line endings (LF) for compatibility with Linux containers
   content = content.replace(/\r\n/g, '\n');
-  
+
   fs.writeFileSync(outputPath, content);
   console.log(`✓ Generated: ${path.relative(path.join(__dirname, '..'), outputPath)}`);
 }
@@ -92,13 +93,47 @@ function execCommand(command, silent = false) {
 }
 
 /**
- * Check if SSL certificate exists for domain
- * @param {string} domain - Domain name
- * @returns {boolean}
+ * Check if a valid SSL certificate exists for the domain and its wildcard.
+ * The certificate must contain both domain and *.domain in the Subject Alternative Name (SAN).
+ * @param {string} domain - Domain name (e.g., example.com)
+ * @returns {boolean} - True if the certificate file exists and covers both domain and *.domain
  */
 function hasCertificate(domain) {
-  const certPath = path.join(__dirname, '..', 'nginx', 'letsencrypt', 'live', domain);
-  return fs.existsSync(certPath);
+  // Path to the fullchain.pem file
+  const certFilePath = path.join(__dirname, '..', 'nginx', 'letsencrypt', 'live', domain, 'fullchain.pem');
+
+  // If the certificate file does not exist, definitely no valid certificate
+  if (!fs.existsSync(certFilePath)) {
+    return false;
+  }
+
+  try {
+    // Use openssl to extract the Subject Alternative Name (SAN) section
+    const output = execSync(
+      `openssl x509 -in "${certFilePath}" -noout -ext subjectAltName`,
+      { encoding: 'utf8' }
+    );
+
+    // Check if both the root domain and wildcard domain are present
+    const hasRoot = output.includes(`DNS:${domain}`);
+    const hasWildcard = output.includes(`DNS:*.${domain}`);
+
+    // Only consider the certificate valid if it covers both
+    return hasRoot && hasWildcard;
+  } catch (error) {
+    // If openssl fails (e.g., corrupt file), treat as no valid certificate
+    console.error(`Error reading certificate for ${domain}:`, error.message);
+    return false;
+  }
+}
+
+/**
+ * Compute MD5 hash of a string
+ * @param {string} str
+ * @returns {string} hex digest
+ */
+function md5(str) {
+  return crypto.createHash('md5').update(str).digest('hex');
 }
 
 module.exports = {
@@ -106,5 +141,6 @@ module.exports = {
   createDirectories,
   processTemplate,
   execCommand,
-  hasCertificate
+  hasCertificate,
+  md5
 };

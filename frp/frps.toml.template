@@ -18,3 +18,9 @@ auth.token = "${FRPS_TOKEN}"
 # Virtual host ports for HTTP/HTTPS tunneling
 vhostHTTPPort = ${FRPS_VHOST_HTTP_PORT}
 vhostHTTPSPort = ${FRPS_VHOST_HTTPS_PORT}
+
+# Base domain for automatic subdomain assignment
+# When used with frpc's `subdomain` option, the full access domain becomes:
+#   <subdomain>.<subdomainHost>
+# Requires a wildcard DNS record (*.<subdomainHost>) pointing to the server
+subdomainHost = "${DOMAIN}"

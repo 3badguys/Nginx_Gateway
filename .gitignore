@@ -9,6 +9,9 @@ nginx/conf.d/*.conf
 # Generated FRP configuration (generated from template)
 frp/frps.toml
 
+# acme.sh data (account keys, cert cache)
+acme-data/
+
 # Let's Encrypt certificates (contains sensitive information, do not commit to version control)
 letsencrypt/
 www/certbot/.well-known/

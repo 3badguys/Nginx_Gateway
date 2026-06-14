@@ -2,32 +2,18 @@
 
 const { loadEnv, execCommand } = require('./utils');
 
-// Main function
 function main() {
-  const args = process.argv.slice(2);
   const env = loadEnv();
-  
-  const domain = args[0] || env.DOMAIN;
-  
+  const domain = process.argv[2] || env.DOMAIN;
+  const provider = env.DNS_PROVIDER || 'west_cn';
+
   console.log(`Renewing certificate for ${domain}...`);
-  
+
   try {
-    // Run certbot to renew certificate
-    // --entrypoint certbot overrides the renewal-loop entrypoint defined in
-    // docker-compose.yml, so the renew command actually runs.
-    // webroot mode works here because nginx is already running on port 80.
-    execCommand(
-      `docker compose run --rm --entrypoint certbot certbot renew ` +
-      `--webroot --webroot-path /var/www/certbot --quiet`
-    );
-    
-    // Reload nginx
-    try {
-      execCommand(`docker compose exec nginx-gateway nginx -s reload`);
-    } catch {
-      // Ignore reload errors
-    }
-    
+    // acme.sh daemon auto-renews via cron; this is the manual fallback
+    execCommand(`docker compose run --rm -T acme --renew-all --dns dns_${provider}`);
+    execCommand(`docker compose exec -T nginx-gateway nginx -s reload`);
+
     console.log('✓ Certificate renewed');
   } catch (error) {
     console.error('✗ Failed to renew certificate');

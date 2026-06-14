@@ -5,7 +5,7 @@
 ## 📋 项目概述
 
 本项目使用 Nginx 作为统一网关，通过 Docker 共享网络实现服务的反向代理，支持：
-- ✅ Let's Encrypt 免费 SSL 证书（自动续期）
+- ✅ Let's Encrypt 免费 SSL 证书（支持泛域名`*.your-domain.com`以及自动续期）
 - ✅ HTTP 自动重定向到 HTTPS (301)
 - ✅ 多项目路径转发
 - ✅ WebSocket 支持，可以用于：
@@ -16,7 +16,6 @@
   - 实时数据推送
   - GraphQL Subscriptions
   - 任何使用 WebSocket 的应用
-- ✅ 灵活的扩展能力
 - ✅ FRP 服务端集成（内网穿透）
 
 ### 当前配置
@@ -49,17 +48,20 @@ Nginx_Gateway/
 │   ├── renew-cert.js               # SSL 证书续期脚本
 │   ├── utils.js                    # 公共工具函数
 │   └── README.md                   # 脚本使用说明
+├── acme/
+│   └── dns-env.sh                  # DNS provider env mapping (entrypoint wrapper)
 ├── frp/
 │   └── frps.toml.template          # FRP 服务端配置模板
 └── nginx/
     ├── nginx.conf.template         # Nginx 主配置模板
     ├── nginx.conf                  # Nginx 主配置文件（自动生成）
+    ├── proxy-common.conf           # 公共代理设置
     ├── conf.d/
     │   ├── domain.conf.template    # 域名配置模板
     │   └── your-domain.com.conf    # 域名配置文件（自动生成）
     ├── letsencrypt/                # Let's Encrypt 证书目录（自动生成）
     ├── www/
-    │   └── certbot/                # ACME 挑战目录（自动生成）
+    │   └── certbot/                # ACME HTTP 挑战目录（DNS 模式下未使用）
     └── logs/                       # Nginx 日志目录（自动生成）
 ```
 
@@ -84,7 +86,8 @@ Nginx_Gateway/
 
 #### 📦 自动生成的目录
 - **`nginx/letsencrypt/`** - Let's Encrypt 证书存储
-- **`nginx/www/certbot/`** - ACME 挑战文件存储
+- **`acme/dns-env.sh`** - DNS provider env mapping entrypoint（添加新供应商在此修改）
+- **`nginx/www/certbot/`** - ACME HTTP 挑战目录（DNS 模式下未使用，预留）
 - **`nginx/logs/`** - Nginx 访问和错误日志
 
 ## 🚀 快速开始
@@ -150,6 +153,11 @@ FRONTEND_PATH=/gfs/
 # BACKEND_SERVICE_NAME=skateboard-backend
 # BACKEND_PORT=3000
 # BACKEND_PATH=/gfs/api/
+
+# DNS-01 challenge (required for wildcard SSL)
+DNS_PROVIDER=west_cn          # see acme/dns-env.sh for supported providers
+DNS_API_USER=your-api-user
+DNS_API_KEY=your-api-key      # plain text, auto-hashed by entrypoint
 
 # Nginx Configuration
 NGINX_WORKER_PROCESSES=auto
@@ -343,7 +351,7 @@ node scripts/get-ssl-cert.js your-domain.com your-email@example.com
 
 ### 手动续期证书
 
-Let's Encrypt 证书有效期为 90 天，Certbot 容器会自动续期。如需手动续期：
+Let's Encrypt 证书有效期为 90 天，acme.sh daemon 内置 cron 会自动续期。如需手动续期：
 ```bash
 npm run ssl:renew your-domain.com
 ```
@@ -351,30 +359,28 @@ npm run ssl:renew your-domain.com
 ### 查看证书信息
 
 ```bash
-docker compose run --rm certbot certificates
+docker compose run --rm -T acme acme.sh --list
 ```
 
 ### 自动续期机制
 
-**Certbot 容器**会持续运行，每 12 小时自动检查证书是否需要续期：
+**acme.sh daemon** 内置 `crond`，每天检查一次证书是否需要续期：
 - ✅ 如果证书距离过期少于 30 天，自动续期
-- ✅ 续期成功后，Nginx 每 6 小时重载配置以应用新证书
+- ✅ 续期成功后，`--reloadcmd` 自动重载 nginx
 - ✅ 无需任何手动干预
 
 **工作流程：**
 ```
-Certbot 容器（持续运行）
-  ↓ 每 12 小时
+acme.sh daemon（持续运行）
+  ↓ 每天
 检查证书有效期
   ↓ 需要续期？
-自动执行续期 → 更新证书文件
-  ↓
-Nginx 容器（持续运行）
-  ↓ 每 6 小时
-重载配置 → 应用新证书
+自动执行 renew → 更新证书文件
+  ↓ --reloadcmd
+docker compose exec nginx-gateway nginx -s reload
 ```
 
-> 💡 **提示**: 由于 Certbot 容器已经提供自动续期功能，通常不需要配置系统级定时任务。
+> 💡 **提示**: 由于 acme.sh daemon 已内置定时续期，不需要配置系统级定时任务。
 
 ## 💻 Node.js 脚本说明
 
@@ -437,7 +443,7 @@ docker network inspect shared_gateway_net
 
 如果遇到证书错误：
 1. 确保证书已成功获取：`ls nginx/letsencrypt/live/your-domain.com/`
-2. 检查证书有效期：`docker compose run --rm certbot certificates`
+2. 检查证书有效期：`docker compose run --rm -T acme acme.sh --list`
 3. 重新获取证书：`npm run ssl:get your-domain.com your-email@example.com`
 4. 检查 `.env` 配置是否完整：`npm run config:generate`
 
@@ -676,78 +682,36 @@ type = "https"
 localIP = "nginx-gateway"
 localPort = 80
 customDomains = ["your-domain.com"]
+
+# Subdomain example — access via pi.your-domain.com
+[[proxies]]
+name = "nginx-gateway-pi"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 80
+subdomain = "pi"
 ```
 
 ## ⚠️ 原理与踩坑记录
 
 记录本项目遇到的几个关键问题及其根因，供后续维护参考。
 
-### 1. Certbot `--webroot` vs `--standalone`
+### 1. HTTP-01 vs DNS-01 验证模式
 
-**现象**：`npm run ssl:get` 在服务器上卡死不动。
+从 certbot 迁移到 acme.sh 的核心原因：需要泛域名证书（`*.your-domain.com`）。
 
-**根因**：
+| 验证模式 | 原理 | 支持泛域名 | 依赖 |
+|---------|------|-----------|------|
+| HTTP-01 (certbot `--standalone`) | 在 80 端口放验证文件，Let's Encrypt 访问确认 | ❌ | 80 端口可用，需停 nginx |
+| DNS-01 (acme.sh `--dns dns_<provider>`) | 在 DNS 记录里加 TXT 值，Let's Encrypt 查询确认 | ✅ | DNS API 凭证 |
 
-| 模式 | 工作原理 | 依赖条件 |
-|------|---------|---------|
-| `--webroot` | certbot 把验证文件写入 webroot 目录，Let's Encrypt 通过 80 端口访问该文件完成验证 | **必须有 web server 在 80 端口** |
-| `--standalone` | certbot 自己启动一个临时 web server 监听 80 端口完成验证 | **80 端口不能被占用** |
+**为什么要停 nginx**：certbot `--standalone` 自己启动临时 web server 监听 80 端口，nginx 也绑了 80，必须停掉 nginx 才能释放端口。acme.sh DNS-01 模式全程不走 80 端口，nginx 可以不中断。
 
-脚本原本的逻辑是：先 `docker compose down nginx-gateway` 释放 80 端口，然后用 `--webroot` 模式。但 webroot 模式需要 nginx 在跑才能响应 ACME 挑战 — 自相矛盾，certbot 一直等验证超时。
+### 2. acme.sh daemon 模式 vs certbot entrypoint 死循环
 
-**修复**：改用 `--standalone`，certbot 自带临时服务器，不依赖 nginx。
+certbot 时代必须在 docker-compose.yml 里配一个 entrypoint 死循环来跑 `certbot renew`，每次手动执行 `certonly` 还要 `--entrypoint` 覆盖——这个设计源于 certbot 容器没有内置 cron。
 
-### 2. `docker compose run` 会继承 service 的 `entrypoint`
-
-**现象**：`docker compose run --rm certbot certonly --standalone ...` 执行后，`docker inspect` 发现容器运行的仍然是 docker-compose.yml 里定义的续期死循环。
-
-**根因**：`docker compose run` 继承目标 service 的全部配置（volumes、networks、entrypoint 等），只覆盖你显式指定的部分。certbot service 在 docker-compose.yml 中定义了：
-
-```yaml
-entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h ...'"
-```
-
-所以 `certonly --standalone ...` 并没有消失，而是被**追加到了 entrypoint 的后面**。Docker 实际运行的是：
-
-```
-/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; ...' certonly --standalone ...
-```
-
-`sh -c` 后面多出来的参数会变成 `$0`、`$1`、`$2`…，但脚本里没有引用 `$@`，这些参数就悄悄被吞了，壳子继续跑死循环续期。
-
-**修复**：加 `--entrypoint certbot` 显式覆盖，让 `certonly` 真正执行。
-
-最终命令里出现了两个 `certbot`：
-
-```
-docker compose run --rm -p 80:80 --entrypoint certbot certbot certonly --standalone ...
-                                      │                 │
-                                      ▼                 ▼
-                                  --entrypoint 的值   service 名
-```
-
-| 位置 | 值 | 含义 |
-|------|-----|------|
-| `--entrypoint certbot` | 第 1 个 | 容器内的二进制 `/usr/bin/certbot`，覆盖 yaml 的续期死循环 |
-| `certbot` | 第 2 个 | `docker-compose.yml` 里的 **service 名称** |
-
-只是碰巧 service 名和二进制都叫 `certbot`，看起来像写重了。后面的 `certonly` 是 certbot 的子命令（"只获取证书不安装"）。
-
-之所以 `certbot`（service 名）夹在中间，是 `docker compose run` 的语法规则：
-
-```
-docker compose run [OPTIONS] SERVICE [COMMAND] [ARGS...]
-```
-
-所以这条命令：
-
-```
-docker compose run --rm -p 80:80 --entrypoint certbot   certbot   certonly --standalone ...
-                   ─────────── OPTIONS ──────────────   ───────   ─────── COMMAND ───────
-                                                         SERVICE
-```
-
-`--entrypoint certbot` 是 OPTIONS，中间的 `certbot` 是 SERVICE，后面的 `certonly --standalone ...` 是传给容器的 COMMAND + ARGS。
+acme.sh 自带 `daemon` 模式，容器里跑 `crond` 每天检查证书到期并自动续期。手动签发或续期使用 `docker compose run --rm -T acme acme.sh --issue/--renew ...`（经过 `acme/dns-env.sh` entrypoint 自动映射 DNS 环境变量）。
 
 ### 3. Nginx 上游 DNS 解析：启动时 vs 请求时
 

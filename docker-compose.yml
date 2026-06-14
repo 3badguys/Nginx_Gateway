@@ -26,14 +26,20 @@ services:
       start_period: 10s
     command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
 
-  # Let's Encrypt Certbot certificate management
-  certbot:
-    image: certbot/certbot
-    container_name: certbot
+  # ACME client (acme.sh) — SSL cert via DNS-01 challenge
+  acme:
+    image: neilpang/acme.sh
+    container_name: acme
     volumes:
       - ./nginx/letsencrypt:/etc/letsencrypt
-      - ./nginx/www/certbot:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"
+      - ./acme-data:/acme.sh
+      - ./acme/dns-env.sh:/dns-env.sh:ro
+      - ./acme/wrapper.sh:/wrapper.sh:ro
+    environment:
+      - DNS_PROVIDER=${DNS_PROVIDER}
+      - DNS_API_USER=${DNS_API_USER}
+      - DNS_API_KEY=${DNS_API_KEY}
+    entrypoint: /wrapper.sh
     restart: unless-stopped
 
   # FRP Server — reverse proxy for exposing local services behind NAT
