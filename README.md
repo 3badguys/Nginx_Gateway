@@ -140,6 +140,9 @@ cp .env.example .env
 
 编辑 `.env` 文件，配置所有必需项：
 ```bash
+# Time Zone
+TIMEZONE=Asia/Shanghai
+
 # Domain & Email
 DOMAIN=your-domain.com
 LETSENCRYPT_EMAIL=your-email@example.com

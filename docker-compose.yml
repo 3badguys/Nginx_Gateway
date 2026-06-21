@@ -13,6 +13,8 @@ services:
       - ./nginx/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/www/certbot:/var/www/certbot:ro
       - ./nginx/logs:/var/log/nginx
+    environment:
+      - TZ=${TIMEZONE:-Asia/Shanghai}
     networks:
       - shared_gateway_net
     extra_hosts:
@@ -36,6 +38,7 @@ services:
       - ./acme/dns-env.sh:/dns-env.sh:ro
       - ./acme/wrapper.sh:/wrapper.sh:ro
     environment:
+      - TZ=${TIMEZONE:-Asia/Shanghai}
       - DNS_PROVIDER=${DNS_PROVIDER}
       - DNS_API_USER=${DNS_API_USER}
       - DNS_API_KEY=${DNS_API_KEY}
@@ -55,6 +58,8 @@ services:
     #   - "${FRPS_VHOST_HTTPS_PORT}:${FRPS_VHOST_HTTPS_PORT}"
     # networks:
     #   - shared_gateway_net
+    environment:
+      - TZ=${TIMEZONE:-Asia/Shanghai}
     restart: unless-stopped
 
 networks:
