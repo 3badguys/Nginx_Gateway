@@ -15,6 +15,9 @@ webServer.password = "${FRPS_DASHBOARD_PWD}"
 # Authentication token for client connections
 auth.token = "${FRPS_TOKEN}"
 
+# Maximum connection pool count
+transport.maxPoolCount = ${FRPS_MAX_POOL_COUNT}
+
 # Virtual host ports for HTTP/HTTPS tunneling
 vhostHTTPPort = ${FRPS_VHOST_HTTP_PORT}
 vhostHTTPSPort = ${FRPS_VHOST_HTTPS_PORT}
