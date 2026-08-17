@@ -39,9 +39,8 @@ server {
 
     # Frontend service
     location /gfs/ {
-        proxy_pass http://skateboard-frontend:5173/;
+        proxy_pass http://host.docker.internal:5173/;
         include /etc/nginx/proxy-common.conf;
-        proxy_buffering off;
     }
 
     # Favicon catch — browsers auto-request /favicon.ico regardless of page path
@@ -100,6 +99,13 @@ server {
     location / {
         proxy_pass http://host.docker.internal:5174/;
         include /etc/nginx/proxy-common.conf;
+        # proxy_buffering off;  # Enable only for real-time scenarios, e.g.:
+        #                         # - SSE / AI streaming responses
+        #                         # - Large file downloads / video streaming
+        #                         # - WebSocket connections
+        #                         # - Long-polling
+        #                         # - Live log or metric streaming
+        #                         # Leave commented (default on) for regular web pages, APIs, and static assets.
     }
 }
 
