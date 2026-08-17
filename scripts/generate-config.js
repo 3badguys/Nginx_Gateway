@@ -15,12 +15,6 @@ function main() {
   const requiredVars = [
     'DOMAIN',
     'LETSENCRYPT_EMAIL',
-    'FRONTEND_SERVICE_NAME',
-    'FRONTEND_PORT',
-    'FRONTEND_PATH',
-    // 'BACKEND_SERVICE_NAME',  // optional — frontend nginx handles /api/ routing
-    // 'BACKEND_PORT',
-    // 'BACKEND_PATH',
     'NGINX_WORKER_PROCESSES',
     'NGINX_WORKER_CONNECTIONS',
     'CLIENT_MAX_BODY_SIZE',
@@ -52,8 +46,6 @@ function main() {
   console.log('Configuration:');
   console.log(`  Domain: ${env.DOMAIN}`);
   console.log(`  Email: ${env.LETSENCRYPT_EMAIL}`);
-  console.log(`  Frontend: ${env.FRONTEND_SERVICE_NAME}:${env.FRONTEND_PORT} at ${env.FRONTEND_PATH}`);
-  console.log(`  Backend: ${env.BACKEND_SERVICE_NAME}:${env.BACKEND_PORT} at ${env.BACKEND_PATH}`);
   console.log(`  FRP Dashboard: https://${env.DOMAIN}${env.FRPS_DASHBOARD_PATH} (bind:${env.FRPS_BIND_PORT} vhost:${env.FRPS_VHOST_HTTP_PORT}/${env.FRPS_VHOST_HTTPS_PORT})`);
   console.log();
   
@@ -88,12 +80,6 @@ function main() {
     path.join(baseDir, 'nginx/conf.d', `${env.DOMAIN}.conf`),
     {
       DOMAIN: env.DOMAIN,
-      FRONTEND_SERVICE_NAME: env.FRONTEND_SERVICE_NAME,
-      FRONTEND_PORT: env.FRONTEND_PORT,
-      FRONTEND_PATH: env.FRONTEND_PATH,
-      BACKEND_SERVICE_NAME: env.BACKEND_SERVICE_NAME,
-      BACKEND_PORT: env.BACKEND_PORT,
-      BACKEND_PATH: env.BACKEND_PATH,
       FRPS_DASHBOARD_PORT: env.FRPS_DASHBOARD_PORT,
       FRPS_DASHBOARD_PATH: env.FRPS_DASHBOARD_PATH,
       FRP_CLIENTS_PATH: env.FRP_CLIENTS_PATH,

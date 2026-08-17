@@ -24,10 +24,11 @@
 |--------|-----|
 | 域名 | `your-domain.com` |
 | 共享网络 | `shared_gateway_net` |
-| 前端服务 | `skateboard-frontend` (容器内端口 80) |
-| 后端服务 | `skateboard-backend` (容器内端口 3000，通过前端 nginx 转发) |
+| 前端服务 | `skateboard-frontend` (端口 5173) |
+| 后端服务 | `skateboard-backend` (端口 3000，通过前端 nginx 转发) |
 | 前端访问路径 | `https://your-domain.com/gfs/` |
 | API 路径 | `https://your-domain.com/gfs/api/*` → 前端 nginx `/api/*` → backend |
+| 前后端代理 | 具体见 `nginx/conf.d/domain.conf.template`，不由 `.env` 配置 |
 | HTTP 端口 | 80 (自动重定向到 443) |
 | HTTPS 端口 | 443 |
 
@@ -147,15 +148,8 @@ TIMEZONE=Asia/Shanghai
 DOMAIN=your-domain.com
 LETSENCRYPT_EMAIL=your-email@example.com
 
-# Frontend Configuration
-FRONTEND_SERVICE_NAME=skateboard-frontend
-FRONTEND_PORT=80
-FRONTEND_PATH=/gfs/
-
-# Backend Configuration (optional — frontend nginx handles /api/* routing)
-# BACKEND_SERVICE_NAME=skateboard-backend
-# BACKEND_PORT=3000
-# BACKEND_PATH=/gfs/api/
+# Frontend/Backend proxy is hardcoded in nginx/conf.d/domain.conf.template
+# (skateboard-frontend:5173 at /gfs/; backend goes through frontend nginx /api/*)
 
 # DNS-01 challenge (required for wildcard SSL)
 DNS_PROVIDER=west_cn          # see acme/dns-env.sh for supported providers
@@ -169,8 +163,6 @@ CLIENT_MAX_BODY_SIZE=10m
 ACCESS_LOG=/var/log/nginx/access.log
 ERROR_LOG=/var/log/nginx/error.log
 ```
-
-> 💡 **提示**: 标记为必需的配置项不能留空。Backend 已注释（API 请求通过前端 nginx 转发）。
 
 #### 2️⃣ 生成 Nginx 配置
 
@@ -457,7 +449,6 @@ docker network inspect shared_gateway_net
 Error: Missing required environment variables in .env:
   - DOMAIN
   - LETSENCRYPT_EMAIL
-  - FRONTEND_SERVICE_NAME
   ...
 ```
 
@@ -496,12 +487,12 @@ proxy_set_header Connection "upgrade";
                        │
         ┌──────────────┴──────────────┬────────────────┐
         │                             │                │
-┌───────────────┐           ┌────────────────┐ ┌─────────────┐
+┌────────────────┐           ┌────────────────┐ ┌─────────────┐
 │ skateboard-   │           │ skateboard-    │ │  其他服务... │
-│ frontend (:80)│           │ backend (:3000)│ │             │
+│ frontend (:5173)│          │ backend (:3000)│ │             │
 │ (含 /api/→    │──────→    │                │ │  :port      │
 │  backend 路由) │           └────────────────┘ └─────────────┘
-└───────────────┘
+└────────────────┘
 ```
 
 ### 请求流程
@@ -521,12 +512,12 @@ proxy_set_header Connection "upgrade";
    # 前端资源请求
    https://your-domain.com/gfs/xxx 
      → Nginx 匹配 /gfs/，剥除 /gfs/
-     → 转发 http://skateboard-frontend:80/xxx → 前端 nginx 返回资源
+     → 转发 http://skateboard-frontend:5173/xxx → 前端 nginx 返回资源
    
    # 后端 API 请求（统一走前端 nginx）
    https://your-domain.com/gfs/api/students
      → Nginx 匹配 /gfs/，剥除 /gfs/
-     → 转发 http://skateboard-frontend:80/api/students
+     → 转发 http://skateboard-frontend:5173/api/students
      → 前端 nginx 的 location /api/ → http://skateboard-backend:3000/students
    ```
 
@@ -758,9 +749,9 @@ Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下
 
 **现象**：502 Bad Gateway，nginx error log 显示 `connect() failed ... Connection refused` 连 `172.20.0.4:5173`。
 
-**根因**：`docker ps` 看到 `0.0.0.0:5173->80/tcp`，`.env` 里顺手写了 `FRONTEND_PORT=5173`。但 5173 是宿主机端口映射，容器间通信走 Docker 内网，直接连容器的**内部端口** 80。5173 在容器内根本没进程监听。
+**根因**：`docker ps` 看到 `0.0.0.0:5173->80/tcp`，误以为要连宿主机的映射端口 5173。但容器间通信走 Docker 内网，直接连容器的**内部端口**（如 80）。
 
-**修复**：`FRONTEND_PORT=80`（容器内实际监听端口）。
+**修复**：确认容器实际监听端口，改 `nginx/conf.d/domain.conf.template` 里 `proxy_pass http://skateboard-frontend:<port>/;` 的端口，再重新生成配置：`npm run config:generate`。
 
 ### 7. Nginx 健康检查的 HTTPS 重定向陷阱
 

@@ -34,6 +34,9 @@ package-lock.json
 # Claude Code
 .claude/
 
+# codebase-index
+.codebase-index/
+
 # OS
 .DS_Store
 Thumbs.db

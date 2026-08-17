@@ -38,8 +38,8 @@ server {
     error_log /var/log/nginx/${DOMAIN}.error.log warn;
 
     # Frontend service
-    location ${FRONTEND_PATH} {
-        proxy_pass http://${FRONTEND_SERVICE_NAME}:${FRONTEND_PORT}/;
+    location /gfs/ {
+        proxy_pass http://skateboard-frontend:5173/;
         include /etc/nginx/proxy-common.conf;
         proxy_buffering off;
     }
@@ -81,6 +81,29 @@ server {
     }
 }
 
+# HTTPS server for zenportal
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name zenportal.${DOMAIN};
+
+    # SSL certificate configuration (Let's Encrypt)
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    # Logging configuration
+    access_log /var/log/nginx/zenportal.${DOMAIN}.access.log main;
+    error_log /var/log/nginx/zenportal.${DOMAIN}.error.log warn;
+
+    # Proxy frontend service
+    location / {
+        proxy_pass http://host.docker.internal:5174/;
+        include /etc/nginx/proxy-common.conf;
+    }
+}
+
+# Wildcard fallback — forwards unmatched subdomains to FRP vhost HTTP
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
