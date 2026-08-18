@@ -8,7 +8,7 @@ All scripts work on Windows, macOS, and Linux without any modification.
 
 ### Generate Configuration
 ```bash
-npm run config:generate
+npm run setup
 ```
 
 ### Get SSL Certificate
@@ -32,13 +32,13 @@ Shell scripts (`.sh`) have been replaced with Node.js scripts (`.js`) for better
 
 **Before:**
 ```bash
-./scripts/generate-config.sh
+./scripts/setup.sh
 ./scripts/get-ssl-cert.sh
 ```
 
 **After:**
 ```bash
-npm run config:generate
+npm run setup
 npm run ssl:get
 ```
 

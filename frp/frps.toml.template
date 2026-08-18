@@ -1,6 +1,6 @@
 # FRP Server Configuration
-# This file is auto-generated from frps.toml.template by generate-config.js
-# Do not edit directly — edit .env and re-run npm run config:generate
+# This file is auto-generated from frps.toml.template by setup.js
+# Do not edit directly — edit .env and re-run npm run setup
 
 # Bind address and port for frpc to connect
 bindAddr = "0.0.0.0"

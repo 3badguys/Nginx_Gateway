@@ -44,7 +44,7 @@ Nginx_Gateway/
 ├── .gitignore                      # Git 忽略配置
 ├── .gitattributes                  # Git 换行符配置
 ├── scripts/                        # Node.js 脚本目录
-│   ├── generate-config.js          # Nginx 配置生成脚本
+│   ├── setup.js                    # Nginx 和 FRP 配置生成脚本
 │   ├── get-ssl-cert.js             # SSL 证书获取脚本
 │   ├── renew-cert.js               # SSL 证书续期脚本
 │   ├── utils.js                    # 公共工具函数
@@ -74,7 +74,7 @@ Nginx_Gateway/
 - **`.env.example`** - 环境变量配置模板，包含所有必需配置项
 
 #### 💻 脚本文件
-- **`scripts/generate-config.js`** - 验证配置并生成 Nginx 和 FRP 配置文件
+- **`scripts/setup.js`** - 验证配置并生成 Nginx 和 FRP 配置文件
 - **`scripts/get-ssl-cert.js`** - 获取 Let's Encrypt SSL 证书
 - **`scripts/renew-cert.js`** - 手动续期 SSL 证书
 - **`scripts/utils.js`** - 公共工具函数（环境加载、命令执行等）
@@ -115,7 +115,7 @@ npm start
 
 或分步执行：
 ```bash
-npm run config:generate  # 生成 Nginx 配置
+npm run setup            # 生成 Nginx 和 FRP 配置
 npm run ssl:get          # 获取 Let's Encrypt 证书
 npm start                # 启动服务
 ```
@@ -167,7 +167,7 @@ ERROR_LOG=/var/log/nginx/error.log
 #### 2️⃣ 生成 Nginx 配置
 
 ```bash
-npm run config:generate
+npm run setup
 ```
 
 此命令会：
@@ -385,7 +385,7 @@ docker compose exec nginx-gateway nginx -s reload
 
 | 命令 | 说明 |
 |------|------|
-| `npm run config:generate` | 生成 Nginx 配置文件 |
+| `npm run setup` | 生成 Nginx 和 FRP 配置文件 |
 | `npm run ssl:get` | 获取 Let's Encrypt SSL 证书 |
 | `npm run ssl:renew` | 手动续期 SSL 证书 |
 | `npm start` | 获取/检查 SSL 证书并启动所有服务 |
@@ -396,7 +396,7 @@ docker compose exec nginx-gateway nginx -s reload
 也可以直接使用 `node` 命令执行：
 
 ```bash
-node scripts/generate-config.js
+node scripts/setup.js
 node scripts/get-ssl-cert.js your-domain.com your-email@example.com
 node scripts/renew-cert.js your-domain.com
 ```
@@ -440,11 +440,11 @@ docker network inspect shared_gateway_net
 1. 确保证书已成功获取：`ls nginx/letsencrypt/live/your-domain.com/`
 2. 检查证书有效期：`docker compose run --rm -T acme acme.sh --list`
 3. 重新获取证书：`npm run ssl:get your-domain.com your-email@example.com`
-4. 检查 `.env` 配置是否完整：`npm run config:generate`
+4. 检查 `.env` 配置是否完整：`npm run setup`
 
 ### 4. 配置验证失败
 
-如果 `npm run config:generate` 报错：
+如果 `npm run setup` 报错：
 ```bash
 Error: Missing required environment variables in .env:
   - DOMAIN
@@ -456,7 +456,7 @@ Error: Missing required environment variables in .env:
 1. 检查 `.env` 文件是否存在
 2. 确保所有必需的配置项都已设置（参考 `.env.example`）
 3. 不要留空任何配置项
-4. 重新运行 `npm run config:generate`
+4. 重新运行 `npm run setup`
 
 ### 5. 前端 HMR 不工作
 
@@ -751,7 +751,7 @@ Docker 容器启动顺序不保证 frps 在 nginx 之前就绪。静态写法下
 
 **根因**：`docker ps` 看到 `0.0.0.0:5173->80/tcp`，误以为要连宿主机的映射端口 5173。但容器间通信走 Docker 内网，直接连容器的**内部端口**（如 80）。
 
-**修复**：确认容器实际监听端口，改 `nginx/conf.d/domain.conf.template` 里 `proxy_pass http://skateboard-frontend:<port>/;` 的端口，再重新生成配置：`npm run config:generate`。
+**修复**：确认容器实际监听端口，改 `nginx/conf.d/domain.conf.template` 里 `proxy_pass http://skateboard-frontend:<port>/;` 的端口，再重新生成配置：`npm run setup`。
 
 ### 7. Nginx 健康检查的 HTTPS 重定向陷阱
 
